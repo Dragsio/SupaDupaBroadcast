@@ -17,4 +17,5 @@ dont-bug-me: [ ]
 dont-in-worlds: [ ]
 
 # List with messages (now you can use a %player variable)
+# Now you can add the expiration time at the end of the message (e.g. "Hello World;expire:2026-01-01T12:00:00" or "json:[{"text":"Hello World"}];expire:2026-01-01T12:00:00")
 messages: [ ]
