@@ -10,9 +10,12 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class SupaDupaBroadcast extends JavaPlugin {
@@ -46,16 +49,30 @@ public class SupaDupaBroadcast extends JavaPlugin {
             @Override
             public void run() {
                 String msg = messages.get(index);
-                if (msg.startsWith("json:")) {
-                    broadCastJson(msg);
-                } else {
-                    String fmsg = parseMsg(msg);
-                    Bukkit.getOnlinePlayers().stream().filter(p -> !dontBugMe.contains(p.getUniqueId()) && !dontInWorlds.contains(p.getWorld().getName())).forEach(p -> {
-                        p.sendMessage(fmsg.replace("%player", p.getName()));
-                    });
+                Matcher expire = Pattern.compile(";expire:(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})").matcher(msg);
 
-                    if (getConfig().getBoolean("console-output")) {
-                        Bukkit.getConsoleSender().sendMessage(msg.replace("%player", "Console"));
+                if (msg.startsWith("json:")) {
+                    broadCastJson(msg, expire);
+                } else {
+                    boolean send = true;
+                    String fmsg = parseMsg(msg);
+
+                    if (expire.find()) {
+                        String expireTime = expire.group(1);
+                        msg = msg.replace(";expire:" + expireTime, "");
+                        if (LocalDateTime.parse(expireTime).isBefore(LocalDateTime.now())) {
+                            send = false;
+                        }
+                    }
+
+                    if (send) {
+                        Bukkit.getOnlinePlayers().stream().filter(p -> !dontBugMe.contains(p.getUniqueId()) && !dontInWorlds.contains(p.getWorld().getName())).forEach(p -> {
+                            p.sendMessage(fmsg.replace("%player", p.getName()));
+                        });
+
+                        if (getConfig().getBoolean("console-output")) {
+                            Bukkit.getConsoleSender().sendMessage(msg.replace("%player", "Console"));
+                        }
                     }
                 }
 
@@ -68,23 +85,34 @@ public class SupaDupaBroadcast extends JavaPlugin {
         task.runTaskTimer(this, interval, interval);
     }
 
-    private void broadCastJson(String msg) {
+    private void broadCastJson(String msg, Matcher expire) {
+        boolean send = true;
         msg = msg.replace("json:", "");
 
-        String finalMsg = msg;
-        Bukkit.getOnlinePlayers().stream().filter(p -> !dontBugMe.contains(p.getUniqueId()) && !dontInWorlds.contains(p.getWorld().getName())).forEach(p -> {
-            BaseComponent[] bc = ComponentSerializer.parse(finalMsg.replace("%player", p.getName()));
-            p.spigot().sendMessage(bc);
-        });
-
-        BaseComponent[] bc = ComponentSerializer.parse(msg);
-        if (getConfig().getBoolean("console-output")) {
-            StringBuilder sb = new StringBuilder();
-            for (BaseComponent b : bc) {
-                sb.append(b.toLegacyText());
+        if (expire.find()) {
+            String expireTime = expire.group(1);
+            msg = msg.replace(";expire:" + expireTime, "");
+            if (LocalDateTime.parse(expireTime).isBefore(LocalDateTime.now())) {
+                send = false;
             }
+        }
 
-            Bukkit.getConsoleSender().sendMessage(sb.toString().replace("%player", "Console"));
+        if (send) {
+            String finalMsg = msg;
+            Bukkit.getOnlinePlayers().stream().filter(p -> !dontBugMe.contains(p.getUniqueId()) && !dontInWorlds.contains(p.getWorld().getName())).forEach(p -> {
+                BaseComponent[] bc = ComponentSerializer.parse(finalMsg.replace("%player", p.getName()));
+                p.spigot().sendMessage(bc);
+            });
+
+            BaseComponent[] bc = ComponentSerializer.parse(msg);
+            if (getConfig().getBoolean("console-output")) {
+                StringBuilder sb = new StringBuilder();
+                for (BaseComponent b : bc) {
+                    sb.append(b.toLegacyText());
+                }
+
+                Bukkit.getConsoleSender().sendMessage(sb.toString().replace("%player", "Console"));
+            }
         }
     }
 
